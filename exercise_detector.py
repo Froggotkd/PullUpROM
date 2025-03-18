@@ -1,9 +1,12 @@
-from flask import Flask, render_template, Response
+from flask import Flask, render_template, Response, request
 import cv2
 import mediapipe as mp
 import numpy as np
 
 app = Flask(__name__)
+
+# Global variable to track if counting has started
+hasStarted = False
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -39,7 +42,6 @@ def calculate_bar(a, b):
 counter = 0
 hasGoneDown = False
 fullyExtended = False
-hasStarted = False
 
 def generate():
     global counter, hasGoneDown, fullyExtended, hasStarted
@@ -96,9 +98,6 @@ def generate():
                 cv2.putText(frame, 'PRESS S TO START COUNTING', (100, 120),
                             cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 1, cv2.LINE_AA)
 
-            if cv2.waitKey(10) & 0xFF == ord('s'):
-                hasStarted = True
-
             if hasStarted:
                 if chin[1] > bar and not hasGoneDown:
                     hasGoneDown = True
@@ -154,6 +153,16 @@ def index():
 
 @app.route("/video_feed")
 def video_feed():
+    return Response(generate(),
+                    mimetype="multipart/x-mixed-replace; boundary=frame",
+                    headers={"Cache-Control": "no-cache, no-store, must-revalidate",
+                             "Pragma": "no-cache",
+                             "Expires": "0"})
+
+@app.route("/start", methods=['POST'])
+def start():
+    global hasStarted
+    hasStarted = True
     return Response(generate(),
                     mimetype="multipart/x-mixed-replace; boundary=frame",
                     headers={"Cache-Control": "no-cache, no-store, must-revalidate",

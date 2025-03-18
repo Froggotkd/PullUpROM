@@ -20,5 +20,8 @@
 <body class="container">
      <h1>Video en directo</h1>
      <img src="{{ url_for('video_feed') }}">
+     <form action="/start" method="post">
+          <button name="btnStart" type="submit" >Start</button>
+     </form>
 </body>
 </html>
