@@ -5,8 +5,8 @@ import numpy as np
 
 app = Flask(__name__)
 
-# Global variable to track if counting has started
-hasStarted = False
+hasStartedPullUp = False
+hasStartedCurl = False
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -39,12 +39,20 @@ def calculate_bar(a, b):
 
     return bar
 
-counter = 0
+
+#Vars for Pull-Up
 hasGoneDown = False
+counter = 0
 fullyExtended = False
 
+#Vars for Curl
+counterCurl = 0
+hasGoneDownCurlL = False
+hasGoneDownCurlR = False
+isLeftDone = False
+
 def generate():
-    global counter, hasGoneDown, fullyExtended, hasStarted
+    global counter, hasGoneDown, fullyExtended, hasStartedPullUp, hasStartedCurl, counterCurl, isLeftDone, hasGoneDownCurlL, hasGoneDownCurlR
 
     while True:
         ret, frame = cap.read()
@@ -57,80 +65,143 @@ def generate():
 
         # Process the frame with MediaPipe Pose
         results = pose.process(rgb_frame)
+        landmarks = results.pose_landmarks.landmark
 
-        try:
-            landmarks = results.pose_landmarks.landmark
+        # Get coordinates
+        indexR = [landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value].y]
+        indexL = [landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value].x, landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value].y] 
 
-            # Get coordinates
-            wristL = [landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value].y]
-            wristR = [landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value].x, landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value].y]
-            chin = [landmarks[mp_pose.PoseLandmark.MOUTH_LEFT.value].x, landmarks[mp_pose.PoseLandmark.MOUTH_LEFT.value].y]
-            shoulderR = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
-            shoulderL = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-            elbowR = [landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
-            elbowL = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
+        wristR = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
+        wristL = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]    
 
-            # Calculate bar
-            bar = calculate_bar(wristL, wristR)
+        chin = [landmarks[mp_pose.PoseLandmark.MOUTH_LEFT.value].x, landmarks[mp_pose.PoseLandmark.MOUTH_LEFT.value].y]
 
-            # Calculate angles
-            angleL = calculate_angle(shoulderL, elbowL, wristL)
-            angleR = calculate_angle(shoulderR, elbowR, wristR)
+        shoulderR = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
+        shoulderL = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
 
-            # Visualize
-            cv2.putText(frame, str(bar),
-                        tuple(np.multiply(wristL, [640, 480]).astype(int)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+        elbowR = [landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
+        elbowL = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
 
-            cv2.putText(frame, str(chin[1]),
-                        tuple(np.multiply(chin, [640, 480]).astype(int)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+        #---------------------------------PULL UP LOGIC ------------------------------------
+        #--------------------------------------------------------------------------------
+        if hasStartedPullUp:
+            try:          
+                # Calculate bar
+                bar = calculate_bar(wristL, wristR)
 
-            cv2.putText(frame, str(angleR),
-                        tuple(np.multiply(elbowR, [640, 480]).astype(int)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+                # Calculate angles
+                angleL = calculate_angle(shoulderL, elbowL, indexL)
+                angleR = calculate_angle(shoulderR, elbowR, indexR)
 
-            cv2.putText(frame, str(angleL),
-                        tuple(np.multiply(elbowL, [640, 480]).astype(int)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+                # Visualize
+                cv2.putText(frame, "{:.2f}".format(bar),
+                            tuple(np.multiply(wristL, [640, 480]).astype(int)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 
-            if not hasStarted:
-                cv2.putText(frame, 'PRESS S TO START COUNTING', (100, 120),
-                            cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 1, cv2.LINE_AA)
+                cv2.putText(frame, "{:.2f}".format(chin[1]),
+                            tuple(np.multiply(chin, [640, 480]).astype(int)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 
-            if hasStarted:
+                cv2.putText(frame, "{:.2f}".format(angleR),
+                            tuple(np.multiply(elbowR, [640, 480]).astype(int)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+
+                cv2.putText(frame, "{:.2f}".format(angleL),
+                            tuple(np.multiply(elbowL, [640, 480]).astype(int)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+
                 if chin[1] > bar and not hasGoneDown:
-                    hasGoneDown = True
+                        hasGoneDown = True
 
                 if hasGoneDown and angleL > 120 and angleR > 120:
-                    fullyExtended = True
+                        fullyExtended = True
 
                 if chin[1] < bar and hasGoneDown and fullyExtended:
-                    print(f"AngleL: {angleL}, AngleR: {angleR}")
-                    counter += 1
-                    print(f"Rep Count: {counter}")
+                        print(f"AngleL: {angleL}, AngleR: {angleR}")
+                        counter += 1
+                        print(f"Rep Count: {counter}")
 
-                    hasGoneDown = False
-                    fullyExtended = False
+                        hasGoneDown = False
+                        fullyExtended = False
 
-        except:
-            pass
+            except:
+                pass
 
-        # Draw rectangle for rep count
-        cv2.rectangle(frame, (0, 0), (225, 73), (245, 117, 16), -1)
+                # Draw rectangle for rep count
+            cv2.rectangle(frame, (0, 0), (225, 73), (245, 117, 16), -1)
 
-        # Rep data
-        cv2.putText(frame, 'REPS', (15, 12),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
-        cv2.putText(frame, str(counter),
-                    (10, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
+                # Draw the bar
+            image_height, image_width, _ = frame.shape  
+            indexR = [
+                int(landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value].x * image_width),
+                int(landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value].y * image_height)
+            ]
+                
+            indexL = [
+                int(landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value].x * image_width),
+                int(landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value].y * image_height)
+            ]
+            indexL = tuple(indexL)
+            indexR = tuple(indexR)
+            cv2.line(frame, indexL, indexR, (255, 0, 230), 9)
 
-        cv2.putText(frame, 'HAS STARTED?', (65, 12),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
-        cv2.putText(frame, str(hasStarted),
-                    (60, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
+                # Rep data
+            cv2.putText(frame, 'REPS', (15, 12),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+            cv2.putText(frame, str(counter),
+                            (10, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
+
+        #---------------------------------CURL LOGIC ------------------------------------
+        #--------------------------------------------------------------------------------
+        if hasStartedCurl:
+            try:
+
+                # Calculate angles
+                angleL_Curl = calculate_angle(shoulderL, elbowL, wristL)
+                angleR_Curl = calculate_angle(shoulderR, elbowR, wristR)
+
+                # Visualize
+                cv2.putText(frame, "{:.2f}".format(angleR_Curl),
+                            tuple(np.multiply(elbowR, [640, 480]).astype(int)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+
+                cv2.putText(frame, "{:.2f}".format(angleL_Curl),
+                            tuple(np.multiply(elbowL, [640, 480]).astype(int)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+
+                
+                if angleL_Curl > 150 and not isLeftDone:  
+                    hasGoneDownCurlL = True  
+
+                if angleL_Curl < 40 and hasGoneDownCurlL:  
+                    counterCurl += 1  
+                    hasGoneDownCurlL = False  
+                    isLeftDone = True  
+                    print(f"Count: {counterCurl}")  
+
+                if angleR_Curl > 150 and isLeftDone:  
+                    hasGoneDownCurlR = True  
+
+                if angleR_Curl < 40 and hasGoneDownCurlR:  
+                    counterCurl += 1  
+                    hasGoneDownCurlR = False  
+                    isLeftDone = False  
+                    print(f"Count: {counterCurl}")  
+
+
+            except:
+                pass
+
+                # Draw rectangle for rep count
+            cv2.rectangle(frame, (0, 0), (225, 73), (245, 117, 16), -1)
+
+                # Rep data
+            cv2.putText(frame, 'REPS', (15, 12),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+            cv2.putText(frame, str(counterCurl),
+                            (10, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA) 
 
         # Render detections
         mp_drawing.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
@@ -149,20 +220,35 @@ def generate():
 
 @app.route("/")
 def index():
+    global hasStartedPullUp 
+    hasStartedPullUp = False
     return render_template("index.html")
 
 @app.route("/video_feed")
 def video_feed():
+    global hasStartedPullUp, hasStartedCurl
+    hasStartedPullUp = False
+    hasStartedCurl = False
     return Response(generate(),
                     mimetype="multipart/x-mixed-replace; boundary=frame",
                     headers={"Cache-Control": "no-cache, no-store, must-revalidate",
                              "Pragma": "no-cache",
                              "Expires": "0"})
 
-@app.route("/start", methods=['POST'])
-def start():
-    global hasStarted
-    hasStarted = True
+@app.route("/startPullUp", methods=['POST'])
+def startPullUps():
+    global hasStartedPullUp
+    hasStartedPullUp = True
+    return Response(generate(),
+                    mimetype="multipart/x-mixed-replace; boundary=frame",
+                    headers={"Cache-Control": "no-cache, no-store, must-revalidate",
+                             "Pragma": "no-cache",
+                             "Expires": "0"})
+
+@app.route("/startCurl", methods=['POST'])
+def startCurl():
+    global hasStartedCurl
+    hasStartedCurl = True
     return Response(generate(),
                     mimetype="multipart/x-mixed-replace; boundary=frame",
                     headers={"Cache-Control": "no-cache, no-store, must-revalidate",
